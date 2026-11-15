@@ -1,0 +1,6 @@
+{
+  "name": "ERP PWA Toko Baju UMKM",
+  "description": "Aplikasi ERP PWA + GAS v40.1 lengkap untuk Toko Baju UMKM dengan POS Kasir, Gudang, Sync, Approval, Kas & Jurnal, Retur, Opname, dan Gemini AI Insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
