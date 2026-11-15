@@ -1,23 +1,15 @@
-export type SaleStatus = 'COMPLETED' | 'VOID_PENDING' | 'VOIDED' | 'NEEDS_REVIEW';
-export type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'REFUNDED';
-export type OfflineStatus = 'ONLINE' | 'PENDING_SYNC' | 'SYNCED' | 'FAILED' | 'NEEDS_REVIEW';
+import { randomUUID } from 'node:crypto';
 
-export type SaleItemInput = {
-  variantId: string;
-  quantity: number;
-  unitPrice?: number;
-};
-
+export type SaleItemInput = { variantId: string; quantity: number };
 export type SaleCreateInput = {
   storeId: string;
   cashierId: string;
   items: SaleItemInput[];
   discountAmount?: number;
-  paymentMethod?: string;
+  paymentMethod?: 'CASH' | 'QRIS' | 'TRANSFER' | 'DEBIT' | 'CREDIT' | 'OTHER';
   paymentAmount?: number;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 };
-
 export type SaleRecord = {
   id: string;
   storeId: string;
@@ -26,129 +18,88 @@ export type SaleRecord = {
   discountAmount: number;
   total: number;
   paidAmount: number;
-  status: SaleStatus;
-  paymentStatus: PaymentStatus;
-  offlineStatus: OfflineStatus;
-  idempotencyKey: string;
-  items: Array<{
-    variantId: string;
-    quantity: number;
-    unitPrice: number;
-    lineTotal: number;
-  }>;
+  paymentStatus: 'UNPAID' | 'PARTIAL' | 'PAID';
+  status: 'COMPLETED';
+  items: Array<{ variantId: string; sku: string; name: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  createdAt: string;
 };
 
-const productCatalog: Record<string, { variantId: string; productName: string; variantName: string; sku: string; price: number; stock: Record<string, number> }> = {
-  'v-1': {
-    variantId: 'v-1',
-    productName: 'Kaos Polos',
-    variantName: 'Putih / S',
-    sku: 'BJU-001-S',
-    price: 85000,
-    stock: {
-      'store-1': 12,
-      'store-2': 8,
-    },
-  },
-  'v-2': {
-    variantId: 'v-2',
-    productName: 'Kaos Polos',
-    variantName: 'Putih / M',
-    sku: 'BJU-001-M',
-    price: 85000,
-    stock: {
-      'store-1': 7,
-      'store-2': 10,
-    },
-  },
+type CatalogItem = { sku: string; name: string; basePrice: number; stock: Record<string, number> };
+const catalog: Record<string, CatalogItem> = {
+  'v-1': { sku: 'BJU-001-S', name: 'Kaos Polos - Putih / S', basePrice: 85000, stock: { 'store-1': 12, 'store-2': 8 } },
+  'v-2': { sku: 'BJU-001-M', name: 'Kaos Polos - Putih / M', basePrice: 85000, stock: { 'store-1': 7, 'store-2': 10 } },
 };
+const storeAdjustment: Record<string, number> = { 'store-1': 0, 'store-2': 5 };
+const sales = new Map<string, SaleRecord>();
+const idempotency = new Map<string, { fingerprint: string; saleId: string }>();
+const stockMovements: Array<{ storeId: string; variantId: string; delta: number; saleId: string; createdAt: string }> = [];
+const audits: Array<{ actorId: string; storeId: string; action: string; entityId: string; createdAt: string }> = [];
 
-const salesStore: SaleRecord[] = [];
+export class SaleError extends Error {
+  constructor(message: string, public readonly status = 400, public readonly code = 'SALE_INVALID') { super(message); }
+}
 
-export function createSale(input: SaleCreateInput): SaleRecord {
-  const { storeId, cashierId, items, discountAmount = 0, paymentMethod = 'CASH', paymentAmount, idempotencyKey } = input;
+export function createSale(input: SaleCreateInput): { sale: SaleRecord; replayed: boolean } {
+  if (!input.storeId || !input.cashierId || !Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100) {
+    throw new SaleError('Toko dan 1–100 item penjualan wajib diisi.');
+  }
+  if (!input.idempotencyKey || input.idempotencyKey.length > 200) throw new SaleError('Idempotency key wajib diisi.');
 
-  if (!storeId || !cashierId || !Array.isArray(items) || items.length === 0) {
-    throw new Error('storeId, cashierId, dan items wajib diisi.');
+  const normalized = new Map<string, number>();
+  for (const item of input.items) {
+    if (!item || typeof item.variantId !== 'string' || !Number.isSafeInteger(item.quantity) || item.quantity <= 0) {
+      throw new SaleError('Varian dan jumlah item tidak valid.');
+    }
+    normalized.set(item.variantId, (normalized.get(item.variantId) ?? 0) + item.quantity);
+  }
+  const fingerprint = JSON.stringify({ storeId: input.storeId, cashierId: input.cashierId, items: [...normalized.entries()].sort(), discountAmount: input.discountAmount ?? 0, paymentAmount: input.paymentAmount ?? null, paymentMethod: input.paymentMethod ?? 'CASH' });
+  const key = `${input.storeId}:${input.idempotencyKey}`;
+  const prior = idempotency.get(key);
+  if (prior) {
+    if (prior.fingerprint !== fingerprint) throw new SaleError('Idempotency key sudah digunakan untuk transaksi berbeda.', 409, 'IDEMPOTENCY_CONFLICT');
+    const existing = sales.get(prior.saleId);
+    if (existing) return { sale: existing, replayed: true };
   }
 
-  const validItems: Array<{ variantId: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
+  const adjustment = storeAdjustment[input.storeId];
+  if (adjustment === undefined) throw new SaleError('Toko tidak ditemukan.', 404, 'STORE_NOT_FOUND');
+  const lines: SaleRecord['items'] = [];
   let subtotal = 0;
-
-  for (const item of items) {
-    const product = productCatalog[item.variantId];
-    if (!product) {
-      throw new Error(`Variant tidak ditemukan: ${item.variantId}`);
-    }
-
-    const qty = Number(item.quantity ?? 0);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      throw new Error(`Quantity tidak valid untuk variant ${item.variantId}`);
-    }
-
-    const available = product.stock[storeId] ?? 0;
-    if (qty > available) {
-      throw new Error(`Stok tidak cukup untuk ${product.productName} (${product.variantName}). Tersedia: ${available}`);
-    }
-
-    const unitPrice = item.unitPrice ?? product.price;
-    const lineTotal = unitPrice * qty;
-
-    validItems.push({
-      variantId: item.variantId,
-      quantity: qty,
-      unitPrice,
-      lineTotal,
-    });
-
+  for (const [variantId, quantity] of normalized) {
+    const item = catalog[variantId];
+    if (!item) throw new SaleError(`Varian tidak ditemukan: ${variantId}`, 404, 'VARIANT_NOT_FOUND');
+    const available = item.stock[input.storeId] ?? 0;
+    if (quantity > available) throw new SaleError(`Stok ${item.name} tidak cukup. Tersedia ${available}.`, 409, 'INSUFFICIENT_STOCK');
+    const unitPrice = Math.round(item.basePrice * (1 + adjustment / 100));
+    const lineTotal = unitPrice * quantity;
     subtotal += lineTotal;
+    lines.push({ variantId, sku: item.sku, name: item.name, quantity, unitPrice, lineTotal });
   }
 
-  const safeDiscount = Math.max(0, Number(discountAmount ?? 0));
-  const total = Math.max(0, subtotal - safeDiscount);
-  const finalPayment = Number(paymentAmount ?? total);
-  const paidAmount = Math.max(0, finalPayment);
+  const discount = input.discountAmount ?? 0;
+  if (!Number.isSafeInteger(discount) || discount < 0 || discount > subtotal) throw new SaleError('Diskon tidak valid.');
+  const total = subtotal - discount;
+  const paid = input.paymentAmount ?? total;
+  if (!Number.isSafeInteger(paid) || paid < 0 || paid > total) throw new SaleError('Nominal pembayaran tidak valid.');
 
-  const paymentStatus = paidAmount >= total ? 'PAID' : 'PARTIAL';
-
-  const saleId = `sale-${crypto.randomUUID()}`;
-  const saleKey = idempotencyKey ?? `${storeId}:${cashierId}:${saleId}`;
-
+  // Validate all items before mutating stock so an invalid line cannot leave a partial sale.
+  const now = new Date().toISOString();
   const sale: SaleRecord = {
-    id: saleId,
-    storeId,
-    cashierId,
-    subtotal,
-    discountAmount: safeDiscount,
-    total,
-    paidAmount,
-    status: 'COMPLETED',
-    paymentStatus,
-    offlineStatus: 'ONLINE',
-    idempotencyKey: saleKey,
-    items: validItems,
+    id: randomUUID(), storeId: input.storeId, cashierId: input.cashierId, subtotal,
+    discountAmount: discount, total, paidAmount: paid,
+    paymentStatus: paid === 0 ? 'UNPAID' : paid === total ? 'PAID' : 'PARTIAL',
+    status: 'COMPLETED', items: lines, createdAt: now,
   };
-
-  salesStore.push(sale);
-
-  for (const item of validItems) {
-    const product = productCatalog[item.variantId];
-    if (product && product.stock[storeId] !== undefined) {
-      product.stock[storeId] = product.stock[storeId] - item.quantity;
-    }
-  }
-
-  return sale;
+  for (const line of lines) catalog[line.variantId].stock[input.storeId] -= line.quantity;
+  sales.set(sale.id, sale);
+  idempotency.set(key, { fingerprint, saleId: sale.id });
+  for (const line of lines) stockMovements.push({ storeId: input.storeId, variantId: line.variantId, delta: -line.quantity, saleId: sale.id, createdAt: now });
+  audits.push({ actorId: input.cashierId, storeId: input.storeId, action: 'SALE_CREATED', entityId: sale.id, createdAt: now });
+  return { sale, replayed: false };
 }
 
-export function getSaleById(id: string): SaleRecord | null {
-  return salesStore.find((sale) => sale.id === id) ?? null;
-}
-
-export function getSalesSummary(): { totalSales: number; transactions: number } {
-  const totalSales = salesStore.reduce((sum, sale) => sum + sale.total, 0);
-  return {
-    totalSales,
-    transactions: salesStore.length,
-  };
+export function getSaleById(id: string): SaleRecord | null { return sales.get(id) ?? null; }
+export function getSalesSummary(storeId?: string) {
+  const records = [...sales.values()].filter((sale) => !storeId || sale.storeId === storeId);
+  return { totalSales: records.reduce((sum, sale) => sum + sale.total, 0), transactions: records.length };
 }
