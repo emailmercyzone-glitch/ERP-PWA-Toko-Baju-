@@ -1,146 +1,146 @@
-# ERP PWA Toko Baju UMKM — Draft Technical Specification
+# ERP PWA Toko Baju UMKM — Draft Spesifikasi Teknis
 
-**Status:** Draft for discussion (v0.1)  
-**Last updated:** 2026-11-15  
+**Status:** Draft untuk diskusi (v0.1)  
+**Terakhir diperbarui:** 2026-11-15  
 **Repository:** `emailmercyzone-glitch/ERP-PWA-Toko-Baju-`  
-**Purpose:** Shared document to agree on product scope and technical direction before larger implementation changes.
+**Tujuan:** Dokumen bersama untuk menyepakati ruang lingkup produk dan arah teknis sebelum perubahan implementasi yang lebih besar.
 
-> This is a discussion draft, not a claim that the current application already meets these requirements. Items marked **Current** are observations from the repository snapshot; items marked **Proposed** are decisions or requirements to review. Production use with real financial, payroll, or customer data is out of scope until the open security and persistence issues are resolved.
+> Ini adalah draft untuk diskusi, bukan klaim bahwa aplikasi saat ini sudah memenuhi kebutuhan ini. Item yang ditandai **Saat Ini** adalah hasil observasi dari snapshot repo; item yang ditandai **Diusulkan** adalah keputusan atau kebutuhan yang perlu disepakati. Penggunaan di produksi dengan data finansial, payroll, atau pelanggan yang nyata belum layak sampai masalah keamanan dan persistensi ditangani.
 
-## 1. Executive summary
+## 1. Ringkasan eksekutif
 
-The project aims to provide a mobile-friendly, installable ERP/POS for a small apparel retailer. The first release should prioritize reliable sales and inventory operations. Other workflows—payroll, consignments, vouchers, WhatsApp, AI insights, and advanced reporting—should follow only after the transaction and data foundations are reliable.
+Proyek ini bertujuan untuk menyediakan ERP/POS yang ramah mobile dan dapat diinstal untuk UMKM toko baju. Rilis pertama harus memprioritaskan operasi penjualan dan stok yang dapat diandalkan. Modul lain seperti payroll, konsinyasi, voucher, WhatsApp, insight AI, dan laporan lanjutan harus mengikuti setelah fondasi transaksi dan data stabil.
 
-**Proposed product principle:** the server-side persistent database is the source of truth. Offline-capable clients may queue eligible operations, but cannot independently establish final payment, approval, or stock state.
+**Prinsip produk yang diusulkan:** database server yang persisten adalah sumber kebenaran. Klien yang mendukung mode offline boleh mengantri operasi yang diizinkan, tetapi tidak boleh secara mandiri menetapkan status final pembayaran, approval, atau stok.
 
-## 2. Current repository snapshot
+## 2. Snapshot repo saat ini
 
-- **Current:** React + TypeScript frontend, Vite, Express server, PWA plugin, IndexedDB-related dependencies, and a Gemini SDK integration are present in the repository.
-- **Current:** `server.ts` dispatches `/api/exec` to a GAS-like API engine and exposes Gemini and document/receipt routes.
-- **Current:** the business engine uses a seeded in-memory `ERPDatabase`; data does not survive process restart and is not shared across instances.
-- **Current:** demo PIN values and login behavior exist in the seed/business logic. They are not acceptable credentials for a deployed system.
-- **Current:** the Gemini service includes a browser-side `VITE_GEMINI_API_KEY` fallback. Secrets must not be exposed through Vite client variables; remove this fallback before release.
-- **Current:** multiple business modes are prototypes or placeholders. Their existence does not imply complete workflows or production readiness.
-- **Current branch changes:** initial API boundary hardening and setup documentation have been added on `security-and-production-baseline`; the in-memory data store and demo authentication limitations remain.
+- **Saat ini:** Frontend React + TypeScript, Vite, Express server, plugin PWA, dependensi IndexedDB, dan integrasi SDK Gemini sudah ada di repo.
+- **Saat ini:** `server.ts` meng-dispatch `/api/exec` ke engine API ala GAS dan mengekpos route Gemini serta dokumen/receipt.
+- **Saat ini:** engine bisnis memakai `ERPDatabase` yang di-seed di memori; data tidak bertahan saat proses restart dan tidak dibagikan antar instance.
+- **Saat ini:** nilai demo PIN dan perilaku login ada di seed/business logic. Itu bukan credential yang layak untuk sistem yang dipakai di deployment.
+- **Saat ini:** service Gemini masih punya fallback browser-side `VITE_GEMINI_API_KEY`. Secret tidak boleh diekspos melalui variabel client Vite; ini harus dihapus sebelum rilis.
+- **Saat ini:** banyak mode bisnis masih berupa prototype atau placeholder. Keberadaan itu bukan bukti fitur selesai atau siap produksi.
+- **Branch saat ini:** hardening dasar boundary API dan dokumentasi setup sudah ditambah di `security-and-production-baseline`; storage in-memory dan batasan autentikasi demo masih tetap ada.
 
-## 3. Goals and non-goals
+## 3. Tujuan dan bukan tujuan
 
-### Goals for the first usable release (proposed)
+### Tujuan rilisan yang bisa dipakai (diusulkan)
 
-1. Record sales and payments without losing data on restart.
-2. Maintain products, variants, store-level stock, and auditable stock movements.
-3. Support owner, manager, cashier, and warehouse workflows with server-enforced permissions.
-4. Provide a usable mobile/tablet PWA and a safe, bounded offline sales queue.
-5. Provide basic operational reports based on persisted data.
-6. Support backup and recovery with a documented, tested process.
+1. Merekam penjualan dan pembayaran tanpa kehilangan data saat restart.
+2. Menjaga produk, varian, stok per toko, dan pergerakan stok yang bisa diaudit.
+3. Mendukung alur owner, manager, kasir, dan gudang dengan permission yang dipaksakan server.
+4. Menyediakan PWA mobile/tablet yang dapat dipakai serta antrian transaksi offline yang aman dan terbatas.
+5. Menyediakan laporan operasional dasar berdasarkan data yang persisten.
+6. Mendukung backup dan restore dengan proses yang terdokumentasi dan teruji.
 
-### Non-goals for the first release (proposed)
+### Bukan tujuan pada rilisan awal (diusulkan)
 
-- Full payroll, tax/e-Faktur, consignment settlement, and affiliate accounting.
-- Real WhatsApp automation or payment-provider integrations.
-- AI-generated business decisions or autonomous business actions.
-- Multi-region or high-availability deployment guarantees.
-- Treating local browser storage as the authoritative database.
+- Payroll lengkap, e-Faktur/tax, settlement konsinyasi, dan accounting afiliasi.
+- Integrasi WhatsApp otomatis atau provider payment yang nyata.
+- Keputusan bisnis otomatis yang dihasilkan AI atau tindakan bisnis mandiri.
+- Multi-region atau jaminan ketersediaan tinggi.
+- Menganggap browser storage sebagai database otoritatif.
 
-## 4. Users and permissions
+## 4. Pengguna dan permission
 
-Proposed roles (permissions must be enforced by the API, not only hidden in the UI):
+Role yang diusulkan (permission harus diberlakukan di API, bukan hanya disembunyikan di UI):
 
-| Role | Initial responsibilities | Restrictions to confirm |
+| Role | Tanggung jawab utama | Batasan yang perlu disepakati |
 |---|---|---|
-| Owner | Configure stores/users; view reports; approve sensitive operations; manage backups | Whether owner can perform cashier actions |
-| Manager | Supervise store; approve configured operations; view store reports | HPP/profit visibility and approval limits |
-| Cashier | Create sales, record payments, view permitted product/stock data | Cannot approve own exceptional discounts or voids |
-| Warehouse | Receive/transfer/count stock and view warehouse inventory | No access to payroll, customer tax IDs, or financial reports |
+| Owner | Mengatur toko/pengguna; melihat laporan; menyetujui operasi sensitif; mengelola backup | Apakah owner juga boleh melakukan aksi kasir |
+| Manager | Mengawasi toko; menyetujui operasi tertentu; melihat laporan toko | Visibilitas HPP/laba dan batas approval |
+| Kasir | Membuat penjualan, mencatat pembayaran, melihat data produk/stok yang diizinkan | Tidak boleh menyetujui diskon/void sendiri |
+| Gudang | Menerima/mengirim/menghitung stok dan melihat stok gudang | Tidak punya akses payroll, data NPWP pelanggan, atau laporan finansial |
 
-**Decision needed:** Are users shared across stores, and should permissions be scoped to one or more store IDs?
+**Keputusan yang perlu ditetapkan:** Apakah pengguna dibagi antar toko, dan apakah permission dibatasi per toko atau per beberapa toko?
 
-## 5. Proposed MVP requirements
+## 5. Kebutuhan MVP yang diusulkan
 
-### Functional requirements
+### Kebutuhan fungsional
 
-- **FR-01 Products:** list/search products and variants; maintain SKU, barcode, price, and active status.
-- **FR-02 Inventory:** show per-store available stock; record receipts, sales, transfers, and stock counts as auditable movements.
-- **FR-03 POS:** create a sale with one or more items; calculate totals server-side; reject invalid quantities and unavailable stock.
-- **FR-04 Payments:** record one or more payment methods; distinguish pending/unverified from confirmed payments.
-- **FR-05 Idempotency:** retrying the same client operation must not create a second sale; idempotency key and payload conflict behavior must be specified.
-- **FR-06 Approvals:** configurable approval workflow for voids, discounts, transfers, and stock adjustments, including actor and decision history.
-- **FR-07 Offline:** queue a sale with a stable idempotency key; display queued/syncing/synced/failed states; provide safe retry and conflict resolution.
-- **FR-08 Reporting:** basic sales totals, transaction count, and stock summary filtered by authorized store and date range.
-- **FR-09 Audit:** record actor, operation, timestamp, store, and target for sensitive operations without logging PINs, tokens, or secrets.
-- **FR-10 Recovery:** create and restore a verified database backup; document recovery point and recovery time expectations.
+- **FR-01 Produk:** menampilkan/menelusuri produk dan varian; menjaga SKU, barcode, harga, dan status aktif.
+- **FR-02 Persediaan:** menampilkan stok per toko; merekam penerimaan, penjualan, transfer, dan opname sebagai pergerakan stok yang bisa diaudit.
+- **FR-03 POS:** membuat penjualan dengan beberapa item; menghitung total di server; menolak kuantitas tidak valid dan stok tidak cukup.
+- **FR-04 Pembayaran:** merekam satu atau beberapa metode pembayaran; membedakan status pending/unverified dan verified.
+- **FR-05 Idempotency:** operasi yang diulang dari client tidak akan menghasilkan penjualan ganda; harus ada kunci idempotency dan perilaku konflik yang jelas.
+- **FR-06 Approval:** workflow approval yang dapat dikonfigurasi untuk void, diskon, transfer, dan penyesuaian stok, termasuk riwayat aktor dan keputusan.
+- **FR-07 Offline:** mengantri penjualan dengan kunci idempotency yang stabil; tampilkan status queued/syncing/synced/failed; sediakan retry dan resolusi konflik yang aman.
+- **FR-08 Laporan:** total penjualan dasar, jumlah transaksi, dan ringkasan stok yang difilter berdasarkan toko dan rentang tanggal yang berwenang.
+- **FR-09 Audit:** merekam aktor, operasi, waktu, toko, dan target untuk operasi sensitif tanpa menyimpan PIN, token, atau secret.
+- **FR-10 Recovery:** membuat dan memulihkan backup database yang terverifikasi; dokumentasikan recovery point dan recovery time expectation.
 
-### Acceptance criteria for MVP
+### Kriteria penerimaan untuk MVP
 
-- A committed sale and its stock movements remain available after an application restart.
-- An invalid request is rejected without partial writes to sale, payment, journal, or stock records.
-- Replaying an accepted idempotency key does not duplicate the sale or decrement stock again.
-- A user cannot perform an action outside their server-verified role/store scope.
-- A queued offline sale clearly reports its final server outcome and does not silently appear settled before confirmation.
-- A backup can be restored in a non-production environment and checked against documented integrity checks.
+- Penjualan yang sudah disetujui dan pergerakan stok tetap tersedia setelah restart aplikasi.
+- Request yang tidak valid ditolak tanpa menulis sebagian data ke penjualan, pembayaran, jurnal, atau stok.
+- Mengulang kunci idempotency yang sudah diterima tidak menambah penjualan atau mengurangi stok lagi.
+- Pengguna tidak bisa menjalankan aksi di luar role/store scope yang diverifikasi oleh server.
+- Penjualan yang diqueue saat offline jelas melaporkan hasil final dari server dan tidak terlihat terselesaikan tanpa konfirmasi.
+- Backup dapat dipulihkan di lingkungan non-produksi dan dicek terhadap integritas yang terdokumentasi.
 
-## 6. Proposed architecture
+## 6. Arsitektur yang diusulkan
 
 ```text
 PWA (React / TypeScript)
-  ├─ Online API client ───────────────┐
-  ├─ IndexedDB: bounded offline queue │
-  └─ UI / local cache                 │
+  ├─ Client API online ───────────────┐
+  ├─ IndexedDB: antrian offline terbatas │
+  └─ UI / cache lokal                 │
                                       ▼
 Express API (TypeScript)
-  ├─ request parsing and schema validation
-  ├─ authentication and authorization
-  ├─ business services / transaction boundaries
-  ├─ audit and idempotency handling
-  └─ server-only integrations (Gemini, future providers)
+  ├─ parsing request dan validasi schema
+  ├─ autentikasi dan otorisasi
+  ├─ service bisnis / transaction boundary
+  ├─ audit dan idempotency handling
+  └─ integrasi server-side (Gemini, integrasi masa depan)
                                       │
                                       ▼
-Persistent relational database (proposed: PostgreSQL)
-  ├─ migrations and constraints
-  ├─ transaction/payment/inventory records
-  └─ backup and restore process
+Database relasional persisten (diusulkan: PostgreSQL)
+  ├─ migration dan constraint
+  ├─ record transaksi/pembayaran/stok
+  └─ proses backup dan restore
 ```
 
-**Proposed default:** PostgreSQL as the shared source of truth for deployed environments. SQLite may be considered for local development or a single-device pilot only after deployment and concurrency needs are agreed. The existing in-memory implementation should be treated as demo data, not migrated implicitly as authoritative records.
+**Default yang diusulkan:** PostgreSQL sebagai sumber kebenaran yang dibagi di lingkungan deployment. SQLite bisa dipertimbangkan untuk local development atau pilot single-device hanya setelah kebutuhan deployment dan concurrency disepakati. Implementasi in-memory saat ini harus diperlakukan sebagai data demo, bukan data yang otomatis diasumsikan sebagai record otoritatif.
 
-**Decision needed:** choose ORM/query layer (for example Prisma or Drizzle) and hosting target after the team confirms operational constraints.
+**Keputusan yang perlu dibuat:** pilih ORM/query layer (misalnya Prisma atau Drizzle) dan target hosting setelah tim menilai kebutuhan operasi.
 
-## 7. Data model outline (proposed)
+## 7. Garis besar model data (diusulkan)
 
-Initial relational entities:
+Entitas relasional utama:
 
-- `users`, `credentials`, `roles` / role assignments, `stores`, and scoped permissions.
-- `products`, `variants`, `prices`, `stock_balances`, and append-only `stock_movements`.
-- `sales`, `sale_items`, `payments`, and `approvals`.
-- `idempotency_records` and `audit_events`.
-- `offline_sync_events` or equivalent server receipt records for client reconciliation.
+- `users`, `credentials`, `roles` / assignment role, `stores`, dan permission yang bersifat scoped.
+- `products`, `variants`, `prices`, `stock_balances`, dan `stock_movements` yang bersifat append-only.
+- `sales`, `sale_items`, `payments`, dan `approvals`.
+- `idempotency_records` dan `audit_events`.
+- `offline_sync_events` atau record serupa yang menangani rekonsiliasi client.
 
-Important invariants:
+Invarian penting:
 
-- Use database transactions for sale, payment, stock movement, and related ledger writes.
-- Store money as integer minor units (IDR rupiah integer) unless a documented currency model requires otherwise.
-- Enforce unique identifiers and idempotency keys at the database layer.
-- Keep stock movement history; do not make a client-provided balance the source of truth.
-- Define deletion/retention rules for customer and employee personal data.
+- Gunakan transaction database untuk penjualan, pembayaran, pergerakan stok, dan penulisan ledger terkait.
+- Simpan uang sebagai integer unit minor (rupiah integer) kecuali model mata uang yang terdokumentasi memerlukan pendekatan berbeda.
+- Terapkan unik identifier dan kunci idempotency di layer database.
+- Simpan histori pergerakan stok; jangan memakai balance dari client sebagai sumber kebenaran.
+- Definisikan aturan penghapusan/retensi untuk data pelanggan dan karyawan.
 
-## 8. API contract direction (proposed)
+## 8. Arah kontrak API (diusulkan)
 
-Use versioned, resource-oriented endpoints rather than expanding an undocumented generic mode dispatcher indefinitely. The existing `/api/exec` contract may remain temporarily for compatibility while features are migrated.
+Gunakan endpoint yang terversi dan berorientasi resource, bukan terus memperluas dispatcher generik yang tidak terdokumentasi. Kontrak `/api/exec` yang ada bisa dipertahankan untuk transisi sementara sambil fitur migrasi ke struktur baru.
 
-| Method and path | Purpose | Authorization (initial proposal) |
+| Method dan path | Tujuan | Otorisasi (usulan awal) |
 |---|---|---|
-| `POST /api/v1/auth/login` | Authenticate a user/PIN credential | Public, rate-limited |
-| `POST /api/v1/auth/logout` | Revoke session | Authenticated |
-| `GET /api/v1/me` | Return actor and authorized store scope | Authenticated |
-| `GET /api/v1/products` | Search products and variants | Authenticated |
-| `GET /api/v1/stores/:storeId/stock` | Read authorized store stock | Store-scoped |
-| `POST /api/v1/sales` | Create sale with idempotency key | Cashier/manager/owner, store-scoped |
-| `POST /api/v1/approvals` | Request an approval | Role/action policy |
-| `POST /api/v1/approvals/:id/decision` | Approve or reject | Authorized approver; no self-approval where policy requires |
-| `GET /api/v1/reports/sales` | Read sales report | Owner/manager policy |
-| `POST /api/v1/gemini/advisor` | Request advisory text | Authenticated, rate-limited, server-side key only |
+| `POST /api/v1/auth/login` | Autentikasi user/PIN | Publik, dibatasi rate-limit |
+| `POST /api/v1/auth/logout` | Batalkan session | Terautentikasi |
+| `GET /api/v1/me` | Mengembalikan actor dan scope toko yang diizinkan | Terautentikasi |
+| `GET /api/v1/products` | Mencari produk dan varian | Terautentikasi |
+| `GET /api/v1/stores/:storeId/stock` | Membaca stok toko yang berwenang | Scoped per toko |
+| `POST /api/v1/sales` | Membuat penjualan dengan idempotency key | Kasir/manager/owner, scoped per toko |
+| `POST /api/v1/approvals` | Membuat request approval | Policy role/action |
+| `POST /api/v1/approvals/:id/decision` | Menyetujui atau menolak | Approver yang berwenang; tanpa self-approval jika policy mengharuskan |
+| `GET /api/v1/reports/sales` | Membaca laporan penjualan | Policy owner/manager |
+| `POST /api/v1/gemini/advisor` | Meminta teks saran | Terautentikasi, rate-limited, secret hanya server-side |
 
-Error response shape (proposed):
+Bentuk response error yang diusulkan:
 
 ```json
 {
@@ -154,77 +154,274 @@ Error response shape (proposed):
 }
 ```
 
-Do not return stack traces, credentials, internal database details, or sensitive customer/employee fields in errors.
+Jangan kembalikan stack trace, credential, detail database internal, atau field sensitif pelanggan/karyawan di error.
 
-## 9. Security and privacy requirements
+## 9. Persyaratan keamanan dan privasi
 
-- Replace demo PINs and role selection with real server-side authentication. Hash credentials using a suitable password hashing algorithm and configured work factor; never compare a submitted PIN directly with stored plaintext.
-- Do not accept a client-supplied role or user ID as proof of identity. Derive actor and store scope from a verified session.
-- Apply authorization per business action and store scope; add tests for denied access.
-- Keep Gemini credentials exclusively in server environment/secrets. Remove the `window.VITE_GEMINI_API_KEY` fallback and verify built assets contain no secret.
-- Validate each endpoint/mode with a schema and explicit bounds. Request-envelope validation alone is insufficient.
-- Use HTTPS in deployment, secure session/cookie settings (or an explicitly reviewed token design), CSRF protection where cookie-based auth is used, and a restrictive CSP after frontend integrations are audited.
-- Use a shared rate-limit store if horizontally scaling. Trust proxy configuration only when deployment topology is known.
-- Minimize personal and financial data returned to clients and stored in logs. Define access, retention, backup encryption, and incident-response procedures.
-- Do not claim IndexedDB encryption protects against an attacker who controls the user's browser/device; prioritize device access controls and server-side authorization.
+- Ganti PIN demo dan pemilihan role dengan autentikasi server-side yang nyata. Hash credential memakai algoritma hashing yang sesuai dengan work factor; jangan bandingkan input PIN langsung dengan plaintext yang tersimpan.
+- Jangan menerima `role` atau `user_id` dari client sebagai bukti identitas. Ambil aktor dan scope toko dari session yang sudah diverifikasi.
+- Terapkan otorisasi per aksi bisnis dan scope toko; tambahkan test untuk akses yang ditolak.
+- Simpan credensial Gemini hanya di environment/server secrets. Hapus fallback `window.VITE_GEMINI_API_KEY` dan verifikasi asset build tidak menampilkan secret.
+- Validasi setiap endpoint/mode dengan schema dan batas eksplisit. Validasi envelope request saja tidak cukup.
+- Pakai HTTPS di deployment, pengaturan session/cookie aman (atau desain token yang sudah ditinjau), CSRF protection bila pakai cookie-based auth, dan CSP yang ketat setelah integrasi frontend ditinjau.
+- Gunakan shared rate-limit store bila scale horizontal. Konfigurasi trust proxy hanya bila topologi deployment sudah jelas.
+- Minimalkan data personal dan finansial yang dikembalikan ke client dan disimpan di log. Definisikan aturan akses, retensi, enkripsi backup, dan prosedur incident response.
+- Jangan klaim enkripsi IndexedDB melindungi dari penyerang yang mengendalikan browser/device pengguna; prioritaskan akses perangkat dan otorisasi server-side.
 
-## 10. Offline and synchronization rules
+## 10. Aturan offline dan sinkronisasi
 
-- Only explicitly approved operations may be queued offline; the first candidate is a sale draft/transaction.
-- Each queued operation includes a unique idempotency key, schema version, creation time, and required business data. Never include API secrets or reusable credentials.
-- Server validation remains authoritative for price, stock, permissions, and payment state.
-- Sync responses must be explicit: accepted, already processed, rejected validation, rejected conflict, or retryable server failure.
-- Do not retry permanent validation/authorization errors automatically. Retry transient network/server failures with bounded exponential backoff and jitter.
-- Preserve the original outcome and provide an operator workflow for rejected/conflicting transactions; do not silently discard the queue.
+- Hanya operasi yang sudah disetujui yang dapat diqueue saat offline; kandidat utama adalah draft transaksi penjualan.
+- Setiap operasi yang diqueue wajib punya kunci idempotency yang unik, version schema, waktu pembuatan, dan data bisnis yang diperlukan. Jangan sertakan secret API atau credentials yang dapat dipakai ulang.
+- Validasi server tetap otoritatif untuk harga, stok, permission, dan status pembayaran.
+- Response sync harus jelas: accepted, already processed, rejected validation, rejected conflict, atau retryable server failure.
+- Jangan otomatis retry kesalahan validasi/otorisasi yang bersifat permanen. Lakukan retry untuk gangguan jaringan atau server transient dengan backoff eksponensial terbatas dan jitter.
+- Pertahankan hasil asli dan sediakan workflow operator untuk transaksi yang ditolak/berkonflik; jangan membuang antrian secara diam-diam.
 
-## 11. Reliability, operations, and quality
+## 11. Keandalan, operasi, dan kualitas
 
-Proposed initial targets (confirm before treating as commitments):
+Target awal yang diusulkan (harus dikonfirmasi sebelum dianggap komitmen):
 
-- API latency: p95 under 500 ms for basic reads and under 2 seconds for standard sale writes, excluding external AI calls.
-- Availability: define a realistic pilot target before production; 99.9% is not assumed without hosting/monitoring/on-call capability.
-- Recovery: define recovery point objective (RPO) and recovery time objective (RTO) before choosing backup schedule.
-- Automated tests: unit tests for business rules; integration tests against a temporary persistent database; API tests for auth, permissions, validation, idempotency, and stock concurrency.
-- CI: dependency install, typecheck/lint, tests, production build, and dependency/security checks.
-- Observability: structured request IDs, redacted logs, health/readiness endpoints, error monitoring, and database/backup alerts.
+- Latensi API: p95 di bawah 500 ms untuk read dasar dan di bawah 2 detik untuk write penjualan standar, tanpa menghitung panggilan AI eksternal.
+- Ketersediaan: tentukan target pilot sebelum production; 99.9% tidak otomatis diasumsikan tanpa hosting, monitoring, dan on-call.
+- Recovery: definisikan RPO (recovery point objective) dan RTO (recovery time objective) sebelum memilih jadwal backup.
+- Automated tests: unit test untuk business rules; integration test terhadap database persisten sementara; API test untuk auth, permission, validasi, idempotency, dan concurrency stok.
+- CI: install dependency, typecheck/lint, test, build production, dan pemeriksaan dependency/security.
+- Observability: request ID terstruktur, log yang telah redacted, health/readiness endpoint, monitoring error, dan alert untuk database/backup.
 
-## 12. Delivery phases (proposed)
+## 12. Fase pengembangan (diusulkan)
 
-### Phase 0 — agree and document
+### Fase 0 — setuju dan dokumentasikan
 
-Confirm MVP, role model, store scoping, deployment assumptions, and data retention. Record decisions below before schema design.
+Pastikan MVP, model role, scope toko, asumsi deployment, dan retensi data disepakati. Catat keputusan di bawah ini sebelum desain schema.
 
-### Phase 1 — foundations
+### Fase 1 — fondasi
 
-Add persistent database, migrations, repository/service boundary, authentication, authorization, schema validation, and automated CI. Keep demo seed data clearly separate from real business data.
+Tambahkan database persisten, migration, boundary repository/service, autentikasi, otorisasi, validasi schema, dan CI otomatis. Data seed demo harus dipisahkan jelas dari data bisnis nyata.
 
-### Phase 2 — operational core
+### Fase 2 — core operasional
 
-Implement products, stock movements, POS sales, payments, idempotency, approval rules, and audit history with database transactions and integration tests.
+Implementasikan produk, pergerakan stok, penjualan POS, pembayaran, idempotency, aturan approval, dan riwayat audit dengan database transaction dan integration tests.
 
-### Phase 3 — offline and operations
+### Fase 3 — offline dan operasional
 
-Implement offline queue reconciliation, verified backups/restores, deployment, monitoring, and documented recovery procedures.
+Implementasikan rekonsiliasi queue offline, backup/restore yang terverifikasi, deployment, monitoring, dan prosedur recovery yang terdokumentasi.
 
-### Phase 4 — additional modules
+### Fase 4 — modul tambahan
 
-Add reports and then prioritize payroll, consignments, vouchers, WhatsApp, and Gemini based on business value and legal/security requirements.
+Tambahkan laporan, lalu prioritaskan payroll, konsinyasi, voucher, WhatsApp, dan Gemini berdasarkan nilai bisnis serta kebutuhan legal/security.
 
-## 13. Decisions for the discussion
+### Fase 5 — hardening
 
-Please answer or edit these before we treat this as an implementation contract:
+Security audit, test, CI/CD, deployment, monitoring, dan validasi production readiness.
 
-1. Is the first release for one store or multiple stores?
-2. Which users and permission rules are essential for MVP? Is PIN login a firm requirement, or can staff use accounts/passwords/passkeys?
-3. Which offline actions are required on day one, and can a sale remain pending until server reconciliation?
-4. Is PostgreSQL acceptable as the deployed source of truth? Where is the intended hosting environment?
-5. Are prices always integer IDR, and which payment methods need verification before a sale is considered paid?
-6. What approval thresholds and separation-of-duties rules should apply to discounts, voids, transfers, and stock counts?
-7. Which data must be retained, and what backup RPO/RTO are acceptable?
-8. Which modules are truly in the first release: POS, stock, cash/journal, reports, payroll, consignment, vouchers, WhatsApp, or AI?
-9. Is Gemini advisory text allowed to receive transaction/business data, and what data must be excluded?
-10. Should the existing `/api/exec` contract be preserved for a transition period or replaced directly?
+## 13. Keputusan yang perlu dibahas
 
-## 14. Change log
+Mohon dijawab atau diedit poin ini sebelum kita anggap ini sebagai kontrak implementasi:
 
-- **v0.1:** Initial discussion draft. Captures repository limitations and proposes an MVP, architecture, requirements, API direction, security baseline, and decisions to resolve. No persistence/auth migration is claimed to be complete.
+1. Apakah rilisan pertama untuk satu toko atau banyak toko?
+2. Login memakai PIN atau akun nyata? Role mana yang wajib untuk MVP?
+3. Operasi offline apa yang wajib ada di hari pertama, dan apakah penjualan bisa tetap tertahan sampai rekonsiliasi server?
+4. Apakah PostgreSQL diterima sebagai source of truth produksi? Lingkungan hosting yang dimaksud dimana?
+5. Apakah harga selalu integer IDR, dan metode pembayaran apa yang harus diverifikasi sebelum penjualan dianggap terbayar?
+6. Aturan approval dan separation-of-duties apa yang harus diterapkan untuk diskon, void, transfer, dan opname stok?
+7. Data apa yang harus dipertahankan, dan RPO/RTO backup yang diterima?
+8. Modul mana yang benar-benar masuk rilisan pertama: POS, stok, kas/jurnal, laporan, payroll, konsinyasi, voucher, WhatsApp, atau AI?
+9. Apakah teks saran Gemini diperbolehkan menerima data transaksi/business, dan data apa yang harus dikecualikan?
+10. Apakah kontrak `/api/exec` harus dipertahankan untuk transisi atau langsung diganti?
+
+## 14. Catatan perubahan
+
+- **v0.1:** Draft diskusi awal. Menangkap keterbatasan repo dan mengusulkan MVP, arsitektur, kebutuhan, arah API, baseline keamanan, dan keputusan yang perlu disepakati. Tidak ada migrasi autentikasi/persistensi yang diklaim sudah selesai.
+
+## 15. Ringkasan keputusan awal yang disarankan
+
+Supaya implementasi tidak meluas terlalu cepat, saya sarankan kita sepakati ini dulu:
+
+- MVP fokus ke: POS + stok + laporan + approval dasar + auth real
+- Database target: PostgreSQL
+- Role: Owner, Manager, Kasir, Gudang
+- Offline queue: wajib untuk transaksi jual, tapi hanya untuk operasi yang benar-benar aman
+- Gemini: masuk setelah core stabil
+- `/api/exec` tetap ada hanya sebagai compatibility layer, bukan source of truth untuk arsitektur baru
+
+Kalau setuju, kita bisa lanjut ke tahap berikutnya: membuat spesifikasi yang lebih rinci per modul dan mulai merancang schema database + API contract yang siap dipakai di implementasi.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
