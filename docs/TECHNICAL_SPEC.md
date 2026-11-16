@@ -1,353 +1,228 @@
-# ERP PWA Toko Baju UMKM — Spesifikasi Teknis Final Draft
+# ERP PWA Toko Baju UMKM — Spesifikasi Teknis
 
-**Versi:** 0.3  
-**Status:** Draft final untuk diskusi produk dan arsitektur awal  
-**Repo:** `emailmercyzone-glitch/ERP-PWA-Toko-Baju-`  
-**Tujuan:** Menyelaraskan produk, UX, dan kebutuhan teknis sebelum implementasi fitur inti.
+Versi: 0.5  
+Status: Draft Fokus Arsitektur  
+Repo: `emailmercyzone-glitch/ERP-PWA-Toko-Baju-`  
+Tujuan: Menetapkan keputusan arsitektur inti sebelum implementasi lebih lanjut, agar MVP tetap realistis untuk UMKM dan tidak terjebak membangun ERP korporat yang berat.
 
-> Dokumen ini merupakan versi yang lebih sederhana dan lebih berorientasi pada kebutuhan UMKM. Fokus utama adalah product usability, keamanan dasar, data tetap aman, proses penjualan yang cepat, serta sistem yang mudah dioperasikan dan dipulihkan.
+> Dokumen ini merangkum keputusan yang sudah dipastikan untuk menjaga keseimbangan antara kecepatan kasir, keamanan, dan stabilitas data. Fokus utama bukan memperluas fitur, melainkan memastikan core workflow retail bisa berjalan dengan benar.
 
-## 1. Ringkasan proyek
+## 1. Ringkasan Keputusan Arsitektur
 
-ERP PWA untuk UMKM toko baju dengan fokus pada operasional harian yang sederhana, cepat, dan jelas. Aplikasi harus memungkinkan toko multi-cabang menggunakan satu sistem dengan akses yang dibatasi sesuai cabang dan peran pengguna.
+Keputusan paling sehat untuk MVP saat ini adalah:
 
-Tujuan utama aplikasi:
+- Multi-toko dari awal
+- Offline-first sebagai prinsip operasional, bukan fitur tambahan
+- Server tetap menjadi sumber kebenaran harga, stok, dan status final transaksi
+- UX kasir dipisahkan dari UX owner
+- Approval hanya untuk transaksi kritis: diskon besar dan void
+- Gemini AI ditunda sampai core workflow stabil
+- MVP harus tetap ramping dan realistis untuk UMKM, bukan ERP korporat
 
-- Penjualan cepat melalui POS.
-- Kelola stok per cabang.
-- Laporan sederhana per toko dan gabungan.
-- Akses data sesuai cabang dan level pengguna.
-- Data aman dan bisa dibackup/restore.
-- Transaksi tetap bisa diproses saat jaringan terputus.
+## 2. Prinsip Operasional Utama
 
-Aplikasi ini dibuat untuk kalangan terbatas dan data dikelola di server sendiri. Oleh karena itu, fokus utama adalah kemudahan penggunaan, keamanan dasar, dan stabilitas operasional.
+### 2.1 Offline-first adalah keharusan
+Untuk toko baju di area dengan jaringan tidak stabil, offline-first bukan opsi. Ini harus masuk dalam daun keputusan architecture. Saat offline:
+- kasir tetap bisa menginput transaksi,
+- data disimpan di perangkat lokal,
+- transaksi tidak dianggap final sampai sync ke server,
+- status transaksi jelas: Menunggu Sinkronisasi, Terkirim, Gagal, atau Butuh Review.
 
-## 2. Keputusan yang sudah disepakati
+### 2.2 Server adalah sumber kebenaran
+Semua keputusan final yang terkait harga, stok, status transaksi, dan validasi bisnis harus disetujui oleh server. Client hanya berperan sebagai interface input dan display state.
+
+### 2.3 UX kasir dan owner beda
+- Kasir membutuhkan kecepatan dan fokus pada transaksi.
+- Owner membutuhkan ringkasan performa dan kontrol penting.
+- UI harus memisahkan kebutuhan ini agar tidak semua fitur dibawa ke satu layar.
+
+### 2.4 Approval hanya untuk tindakan kritis
+Approval tidak dipakai untuk seluruh transaksi. Fokusnya terbatas pada kondisi berikut:
+1. diskon besar,
+2. void / pembatalan transaksi,
+3. konflik stok atau status transaksi yang belum jelas.
+
+## 3. Keputusan yang Sudah Disepakati
 
 | Aspek | Keputusan |
 |---|---|
-| Jumlah toko | Multi-toko |
-| Login | PIN |
-| Database | Pilihan adapter sesuai kebutuhan user / deployment; tidak dipaksa ke satu teknologi di code-level |
-| AI Gemini | Ditunda setelah fitur inti stabil |
-| Offline penjualan | Wajib di MVP |
-| Fokus UI/UX | Minimalis, bersih, premium, sederhana, tidak terlalu banyak istilah teknis |
-| Fokus bisnis | Singkat, jelas, tidak terlalu banyak lapisan/proses yang menghambat operasional |
+| Jumlah toko | Multi-toko dari awal |
+| Login | PIN untuk akses cepat dan sederhana |
+| Offline | Wajib dalam MVP |
+| Validasi final | Server sebagai sumber kebenaran |
+| AI Gemini | Ditunda |
+| Approval | Hanya untuk kondisi kritis |
+| UI | Kasir dan owner dipisah |
+| Scope | Realistis untuk UMKM, bukan ERP korporat |
 
-## 3. Prinsip utama sistem
+## 4. Risiko Terbesar yang Harus Diputus Sebelum Maju
 
-### 3.1 Offline-first untuk penjualan
+### 4.1 Adapter database bukan sekadar soal storage
+Fleksibilitas adapter terdengar menarik, tetapi pada implementasi nyatanya tidak semua storage memiliki kemampuan yang sama. Ini harus dibedakan secara jelas.
 
-Aplikasi harus bisa dipakai saat jaringan tidak stabil atau tidak ada internet. Saat itu:
+Kita perlu membedakan antara:
+- adapter yang mendukung transaksi atomik dan concurrent write,
+- adapter yang hanya cocok untuk penyimpanan ringan atau file-based workflow,
+- adapter yang hanya cocok sebagai deployment kecil / demo / single-store.
 
-- kasir tetap bisa membuat transaksi dari aplikasi
-- transaksi disimpan di perangkat lokal menggunakan IndexedDB
-- status transaksi ditampilkan dengan jelas: menunggu kirim, terkirim, gagal
-- saat internet kembali, aplikasi otomatis menyinkronkan transaksi ke server
-- transaksi baru dinyatakan final setelah server menerima dan memvalidasi
+### 4.2 Capability Matrix untuk database adapter
+Sebelum menganggap satu adapter setara dengan adapter lain, harus ada matrix capability. Contohnya:
 
-Peran server tetap paling penting. Server memvalidasi harga, stok, hak akses, dan status transaksi. Data lokal adalah pendukung saat offline, bukan sumber kebenaran utama.
+| Capability | PostgreSQL | Google Sheets / GAS | Catatan |
+|---|---|---|---|
+| Transaksi atomik | Ya | Tidak | Sangat penting untuk stok dan penjualan |
+| Concurrent write aman | Ya | Lemah / perlu locking custom | Risiko race condition nyata |
+| Audit trail kuat | Ya | Terbatas | Harus disusun manual |
+| Backup / restore | Sangat kuat | Terbatas | Beda sangat signifikan |
+| Skala multi-cabang | Baik | Terbatas | Tak cocok untuk toko yang terus tumbuh |
+| Risiko data corruption | Rendah | Lebih tinggi | Harus diwaspadai |
 
-### 3.2 Database bukan hal yang dipaksakan
+Kesimpulan yang paling sehat:
+- Untuk MVP, PostgreSQL harus diposisikan sebagai sumber kebenaran utama.
+- Google Sheets / GAS bisa dipertimbangkan sebagai opsi terbatas untuk deployment kecil, bukan sebagai adapter setara yang menggantikan transaksi multi-user.
+- Jika tetap dipakai, itu harus dianggap sebagai deployment khusus dan bukan solusi default untuk multi-toko dengan transaksi real-time.
 
-User boleh memilih cara penyimpanan data berdasarkan kebutuhan dan infrastruktur mereka. Rancangan aplikasi harus dibuat agar backend bisa menggunakan pilihan seperti:
+### 4.3 Offline + stok + harga harus memiliki aturan konflik yang jelas
+Ini adalah titik yang paling kritis. Ketiga elemen ini saling bertentangan jika tidak didefinisikan dengan jelas.
 
-- PostgreSQL
-- Google Apps Script / Google Sheets (jika memang dipilih)
-- penyimpanan lain yang sesuai kebutuhan di masa depan
+Aturan yang disepakati:
+- Harga offline disimpan sebagai snapshot dari device saat transaksi dibuat.
+- Stok offline dihitung berdasarkan stok terakhir yang diketahui device.
+- Saat sync, server mengecek stok dan harga terbaru.
+- Jika harga atau stok berubah sejak transaksi dibuat, status transaksi berubah menjadi Butuh Review, bukan final.
+- Server tetap memutuskan apakah transaksi diterima, ditolak, atau perlu approval tambahan.
 
-Yang penting adalah:
+## 5. Alur Offline yang Disarankan
 
-- pola bisnis tetap sama untuk semua adapter
-- semua pilihan harus memiliki validasi, backup, dan restore yang jelas
-- kita tidak mengharuskan user memakai satu teknologi tertentu jika belum ada keputusan kuat
+### 5.1 Saat online
+- transaksi dibuat biasa,
+- data dikirim ke server,
+- server validasi harga, stok, dan hak akses,
+- transaksi tampil final jika valid.
 
-### 3.3 UX sederhana seperti aplikasi sehari-hari
+### 5.2 Saat offline
+- kasir tetap bisa mencatat penjualan,
+- transaksi disimpan dengan ID unik (idempotency key),
+- status awal = Menunggu Sinkronisasi,
+- server tidak langsung menganggap transaksi valid.
 
-UI aplikasi harus terasa seperti aplikasi kasir modern, bukan software ERP yang terlalu “korporat”.
+### 5.3 Saat koneksi kembali
+- antrian transaksi dikirim ke server,
+- server mengecek stok terbaru, harga berlaku, dan validitas user,
+- hasil status:
+  - Terkirim
+  - Ditolak
+  - Butuh Review
+  - Gagal
 
-Contoh arah UX:
+### 5.4 Peraturan penting
+- Setiap transaksi offline harus punya ID unik.
+- Server harus menyimpan idempotency key untuk menghindari duplikasi.
+- Waktu final harus memakai waktu server, sedangkan waktu lokal tetap disimpan untuk audit.
+- Device yang sudah offline tetap harus memiliki mekanisme expiry masa validasi sesi, agar tidak memperpanjang sesi tak terbatas.
 
-- halaman kasir cepat dan fokus ke transaksi
-- daftar produk cepat dicari, mudah ditambah ke keranjang
-- tombol bayar jelas, proses checkout singkat
-- laporan ringkas dan mudah dibaca
-- owner melihat ringkasan bisnis dengan cepat
-- tidak memakai istilah teknis di layar jika bisa diganti dengan istilah yang umum dipahami
+## 6. Aturan Harga dan Stok
 
-## 4. Ringkasan fitur MVP
-
-Fitur inti yang masuk MVP:
-
-1. Login dengan PIN
-2. Multi-toko
-3. Produk & varian
-4. Harga per produk / cabang
-5. Stok per cabang
-6. POS penjualan
-7. Pembayaran
-8. Cek stok saat checkout
-9. Histori transaksi
-10. Laporan dasar penjualan dan stok
-11. Offline queue untuk penjualan
-12. Backup dan restore
-13. Approval dasar untuk kondisi tertentu
-14. Audit sederhana: siapa melakukan apa dan kapan
-
-Fitur yang tidak wajib di MVP:
-
-- Gemini AI
-- payroll detail
-- e-faktur/PPN kompleks
-- konsinyasi/afiliasi penuh
-- module bisnis yang terlalu berat dan rumit
-- banyak approval yang menghambat kerja harian
-
-## 5. Struktur user dan akses
-
-### 5.1 Peran awal
-
-| Peran | Fokus utama |
-|---|---|
-| Owner | Overview toko, laporan gabungan, control, approval penting |
-| Manager | Mengawasi cabang yang ditugaskan |
-| Kasir | Input penjualan, pembayaran, transaksi harian |
-| Gudang | Stok dan pergerakan stok |
-
-### 5.2 Aturan keamanan dasar
-
-- PIN hanya ada di server dan disimpan dengan metode aman.
-- Setiap login harus menghasilkan sesi yang valid dan memiliki waktu kedaluwarsa.
-- Peran dan cabang ditentukan di server, bukan dikirim dari frontend sebagai nilai yang dipercaya.
-- Setiap operasi penting harus divalidasi oleh backend.
-- Log aktivitas sensitif disimpan tanpa menampilkan PIN, token, atau secret.
-
-## 6. Scope produk yang disederhanakan
-
-### 6.1 POS & penjualan
-
-Fungsi utama:
-
-- cari produk
-- tambah ke keranjang
-- ubah qty
-- hitung total otomatis
-- pilih metode pembayaran
-- simpan transaksi
-- cetak/lihat struk
-- transaksi bisa ditahan saat offline dan dikirim setelah online
+### 6.1 Harga
+Saat offline, transaksi menggunakan snapshot harga yang tampil di device. Namun:
+- jika harga berubah sebelum sync,
+- atau harga yang dibeli tidak sesuai dengan harga server,
+- maka transaksi masuk Butuh Review.
 
 ### 6.2 Stok
+Saat offline, stok yang ditampilkan bisa ketinggalan. Saat sync, server mengecek stok real-time. Jika stok tidak mencukupi:
+- transaksi tidak langsung dipaksakan final,
+- status masuk Butuh Review,
+- manager dapat memutuskan apakah diterima, ditolak, atau ditangani dengan langkah khusus.
 
-Fungsi utama:
+### 6.3 Konflik stok yang perlu didefinisikan lebih lanjut
+Konflik stok saat ada dua kasir menjual barang yang sama pada waktu bersamaan. Solusi yang paling realistis:
+- server mengutamakan validasi final,
+- transaksi yang sebelumnya dibuat offline tetap masuk antrian,
+- jika konflik terjadi, transaksi yang paling dulu valid di server yang menang,
+- transaksi lain masuk Butuh Review atau gagal.
 
-- lihat stok per cabang
-- penerimaan barang
-- penjualan mengurangi stok
-- opname sederhana
-- mutasi antar cabang jika dibutuhkan
+## 7. PIN dan Keamanan Akses
 
-### 6.3 Laporan
+PIN untuk UMKM terbukti cepat dan masuk akal, tetapi harus ditata agar tidak terlalu rapuh.
 
-Laporan yang cukup di MVP:
+### 7.1 Aturan minimum yang disarankan
+- PIN minimal 6 digit, bukan 4 digit
+- lockout setelah beberapa percobaan salah (misal 5 kali)
+- cooldown waktu setelah lockout
+- logout otomatis saat idle (misal 10–15 menit)
+- owner dan kasir punya kebijakan PIN yang berbeda
+- PIN tidak boleh menggunakan pola umum seperti 123456, tanggal lahir, atau kombinasi yang jelas
 
-- omzet harian per toko
-- jumlah transaksi
-- produk terlaris
-- stok menumpuk
-- penjualan per periode
+### 7.2 Kompensasi keamanan
+Terapkan berikut ini untuk menjaga PIN tetap usable:
+- rate limit per device dan per user,
+- lockout per device,
+- sesi kasir dengan timeout pendek,
+- validasi ulang saat kembali online setelah periode offline tertentu.
 
-Laporan tidak perlu terlalu kompleks di awal. Yang penting mudah dibaca dan cepat dipahami.
+## 8. Scope MVP yang Lebih Realistis
 
-## 7. Approval yang masuk MVP
+Daftar fitur MVP yang terlalu berat untuk dikerjakan sekaligus harus dipotong ke urutan prioritas yang lebih masuk akal.
 
-Untuk menjaga workflow tetap cepat dan tidak terlalu berbelit, approval hanya dilakukan untuk kondisi kritis berikut:
+### Fase 0 — inti yang harus jalan dulu
+1. Login PIN + role dasar
+2. Multi-toko
+3. Produk + varian
+4. POS online
+5. Stok berkurang benar saat valid
+6. Histori transaksi
 
-1. **Diskon besar** di atas batas yang telah ditentukan
-2. **Void / pembatalan transaksi** yang sudah selesai
+### Fase 1 — yang bikin sistem beda
+7. Offline queue + sync
+8. Laporan dasar per toko
+9. Status transaksi sinkronisasi dan review
 
-Yang tidak perlu masuk MVP:
+### Fase 2 — kontrol operasional
+10. Approval diskon besar dan void
+11. Audit log sederhana
+12. Backup / restore dasar dan teruji
 
-- approval transfer antar toko
-- approval opname stok kecil
-- approval untuk beberapa proses operasional kecil lainnya
+Ini lebih masuk akal daripada menaruh semua hal sekaligus di awal. Core workflow retail harus stabil dulu sebelum menambah kontrol yang kompleks.
 
-Tujuannya agar alur kasir tetap lancar, tapi transaksi penting tetap punya kontrol.
+## 9. Definisi Bisnis yang Harus Ditetapkan Secepatnya
 
-### Aturan yang disarankan
+Beberapa definisi ini berdampak besar pada coding dan laporan:
 
-- Kasir bisa input transaksi biasa tanpa approval.
-- Jika diskon melebihi batas, approval harus masuk.
-- Jika transaksi dibatalkan, approval perlu sesuai kebijakan.
-- Semua approval dicatat dan bisa dilihat di riwayat.
+- Omzet: gross atau net setelah diskon?
+- Diskon besar: nominal atau persen? Berapa plafonnya?
+- Stok menumpuk: threshold berapa hari?
+- Void: beda dengan refund / retur barang?
+- Metode pembayaran: cash, QRIS, transfer, split payment?
+- Struk: berbasis scanner SKU atau pencarian nama produk?
 
-## 8. Offline-first dan sinkronisasi
+Tanpa definisi ini, laporan bisa berbeda antara kasir dan owner, dan trust terhadap sistem turun.
 
-### 8.1 Cara kerja
+## 10. Prinsip Keselamatan Data
 
-Saat internet tersedia:
+Konsep berikut harus dijaga selama pengembangan:
+- manual backup tidak sama dengan backup yang bisa dipulihkan dengan benar,
+- log yang tidak bisa diverifikasi bukan audit log yang berguna,
+- validasi luar tidak boleh menggantikan validasi bisnis yang sebenarnya,
+- server harus menjadi satu-satunya penentu final state untuk penjualan dan stok.
 
-- transaksi dibuat biasa
-- data dikirim ke server secara langsung
+## 11. Status MVP yang Sehat
 
-Saat jaringan terputus:
+MVP yang realistis harus fokus pada hal berikut:
+- proses penjualan utama jalan lancar,
+- stok berkurang sesuai transaksi valid,
+- offline memiliki status dan aturan review yang jelas,
+- approval hanya untuk kejadian kritis,
+- owner mendapat ringkasan yang berguna,
+- kasir tidak dibebani flow yang terlalu kompleks.
 
-- transaksi ditulis ke IndexedDB
-- status ditampilkan: menunggu terkirim
-- item tetap bisa ditambah dan dibayar di aplikasi
+## 12. Catatan Akhir
 
-Saat koneksi kembali:
+Tujuan utama produk ini bukan membangun ERP yang berlapis-lapis. Tujuan utamanya adalah membangun sistem toko baju yang:
+- adil untuk kasir,
+- wajar untuk owner,
+- aman secara dasar,
+- cukup kuat untuk operasional harian,
+- siap berkembang secara bertahap tanpa mengorbankan integritas data.
 
-- aplikasi mengirim antrian transaksi ke server
-- server mulai validasi satu per satu
-- server mengembalikan status: sukses, gagal, atau butuh review
-
-### 8.2 Status yang disarankan
-
-- Draft (belum dikirim)
-- Menunggu kirim
-- Terkirim
-- Gagal
-- Butuh review
-
-### 8.3 Prinsip penting
-
-- transaksi tidak boleh terduplikasi saat retry
-- server menjadi penentu final status
-- aplikasi tidak menganggap transaksi selesai hanya karena sudah ditulis di perangkat
-- ada log yang bisa dilihat untuk klarifikasi jika ada konflik
-
-## 9. Keamanan dasar yang wajib ada
-
-Karena aplikasi akan dipakai untuk bisnis nyata, beberapa hal wajib ada meski tidak terlalu rumit:
-
-- PIN tidak disimpan sebagai plain text
-- session login memiliki batas waktu
-- percobaan login salah dibatasi
-- input user disanitasi di server
-- akses per cabang dibatasi
-- API tidak membocorkan error internal ke client
-- secret seperti API key Gemini hanya ada di sisi server
-- backup harus aman dan mudah dipulihkan
-
-## 10. Rancangan arsitektur yang sederhana
-
-```text
-Frontend PWA (React + TypeScript)
-  ├─ UI POS dan dashboard
-  ├─ IndexedDB untuk queue offline
-  └─ storage lokal sementara untuk transaksi yang belum terkirim
-
-Backend API (Express / Node.js)
-  ├─ autentikasi / session / PIN
-  ├─ validasi data
-  ├─ logika bisnis produk, stok, penjualan
-  ├─ approval dasar
-  ├─ laporan sederhana
-  └─ backup / restore / log audit
-
-Penyimpanan data (adapter yang bisa dipilih)
-  ├─ PostgreSQL (opsi utama untuk deployment serius)
-  ├─ GAS / Google Sheets (opsi yang mungkin dipilih user)
-  └─ opsi lain di masa depan
-```
-
-Arsitektur ini tetap sederhana dan tidak mengharuskan user mempelajari banyak lapisan teknis. Semua logika bisnis tetap di backend; frontend hanya memudahkan input dan tampilan.
-
-## 11. Basis data yang aman dan mudah dikelola
-
-Kebutuhan yang paling penting daripada teknologi spesifik:
-
-- data tidak hilang saat restart server
-- transaksi dan stok hasil akhir tersimpan dengan benar
-- backup mudah dibuat
-- restore dapat diuji dan dipahami
-- data dapat dibedakan per cabang
-- riwayat transaksi tetap ada
-
-Pemilihan database bisa diputuskan saat deployment, bukan di awal diskusi bisnis. Yang penting adalah aplikasi dibuat agar bisa beradaptasi dengan penyimpanan yang benar-benar dipilih.
-
-## 12. Kriteria sukses MVP
-
-MVP dianggap cukup untuk diuji bila:
-
-- kasir bisa menjual saat online maupun offline
-- stok berkurang tepat saat transaksi valid
-- transaksi tidak duplikat saat request ulang
-- laporan sederhana bisa ditampilkan per toko
-- backup dapat dibuat dan restore dapat diuji
-- approval untuk diskon besar dan void berfungsi
-- admin bisa melihat aktivitas penting dan status transaksi
-- UI mudah dipahami dan tidak terlalu berat untuk operator toko
-
-## 13. UX yang disarankan
-
-### 13.1 Untuk kasir
-
-Halaman kasir hanya fokus pada:
-
-- cari produk
-- tambah ke keranjang
-- bayar
-- struk
-
-Semua detail operasional di belakang layar.
-
-### 13.2 Untuk owner
-
-Owner melihat:
-
-- omzet hari ini
-- jumlah transaksi
-- stok berisiko
-- ringkasan toko dan cabang
-- status backup dan sum
-
-### 13.3 Untuk laporan
-
-Laporan dibuat seperti dashboard ringkas: 
-
-- total penjualan
-- produk paling laku
-- stok menumpuk
-- trend harian
-
-Tidak memperkenalkan istilah akuntansi yang bikin bingung bila belum perlu.
-
-## 14. Fokus implementasi yang disarankan
-
-Urutan terbaik:
-
-1. Login PIN + role basic + multi-toko
-2. Produk + stok + harga
-3. POS penjualan + pembayaran + validasi
-4. Transaksi offline + queue sync
-5. Laporan dasar
-6. Approval dasar (diskon besar, void)
-7. Backup & restore
-8. Fitur tambahan setelah core stabil
-
-## 15. Fitur yang sebaiknya ditunda
-
-- Gemini AI
-- modul payroll yang detail
-- laporan keuangan kompleks
-- e-faktur formal
-- integrasi WhatsApp yang terlalu banyak
-- pembahasan broad-based ERP framework yang terlalu rumit untuk UMKM
-
-## 16. Keputusan produk yang sudah final untuk saat ini
-
-- Multi-toko: ya
-- Login: PIN
-- Offline penjualan: wajib di MVP
-- Database: dapat dipilih sesuai kebutuhan user / deployment
-- Gemini AI: setelah fitur inti stabil
-- Approval: hanya untuk diskon besar dan void yang critical
-- UI: minimalis, clean, premium, sederhana, tidak terlalu korporat
-
-## 17. Catatan akhir
-
-Target utama ERP PWA ini bukan mencari sistem sekeren atau sekorporat mungkin. Targetnya adalah sistem yang mudah dipakai oleh pemilik toko dan kasir, aman secara sederhana, data aman, mudah backup, mudah restore, dan tetap bisa beroperasi saat jaringan terganggu.
-
-Dengan cara itu, aplikasi tetap punya nilai bisnis nyata, tidak terlalu kompleks di awal, dan siap berkembang saat kebutuhan toko meningkat.
+Dengan keputusan ini, MVP tetap realistis untuk UMKM dan tidak menggantungkan seluruh arsitektur pada adapter yang tidak setara secara kapasitas.

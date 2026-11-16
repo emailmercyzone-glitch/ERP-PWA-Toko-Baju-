@@ -1,39 +1,99 @@
 # ERP PWA Toko Baju UMKM
 
-Prototype ERP/PWA built with React, TypeScript, Vite, Express, and a simulated GAS-like API engine.
+A prototype ERP and PWA system for fashion retail operations, built with React, TypeScript, Vite, Express, and a simulated business engine inspired by a GAS-like workflow model.
 
-## Local development
+This project is designed for small to medium-sized fashion retail businesses that need:
+- fast daily POS workflows,
+- multi-store visibility,
+- stock tracking,
+- offline-friendly transactions,
+- simple reporting,
+- basic operational controls.
 
-- Install dependencies with `bun install` or `npm install`.
-- Copy `.env.example` to `.env` and set server-side secrets if using Gemini.
-- Run `bun run dev` (or `npm run dev`).
-- Run `bun run build` and `bun run lint` before submitting changes.
-- Run production with `NODE_ENV=production npm start` after building.
+This repository is currently positioned as a functional prototype and MVP foundation for internal evaluation. It is not a production-grade ERP system.
 
-The `start` script uses `tsx` so the TypeScript Express entry point runs correctly in this ESM project. Configure the service to terminate/restart through your process manager.
+## Product Decisions
 
-## Current limitations — not production-ready
+The project is intentionally scoped around a realistic MSME operating model:
 
-- `src/services/db.ts` creates a seeded in-memory database. Its data resets on restart and is not shared across instances. Do not use it as the system of record for real transactions.
-- The API does not yet have a complete authenticated authorization/session model. The demo PINs and role/login behavior in the business engine are not secure credentials. Do not expose the app publicly or process real customer/payroll data until authentication and role-based authorization are implemented.
-- The request rate limiter added to Express is process-local; use a shared store and proxy-aware configuration for multi-instance deployment.
-- Backups, restore, document generation, and several business operations are prototypes; verify they are real before relying on them.
-- API envelope validation is a first boundary check, not a substitute for validating each mode's payload and business invariants.
+- Multi-store from the start
+- Offline-first as a core requirement, not a bonus feature
+- Server remains the source of truth for pricing, stock, and final transaction state
+- Owner and cashier UX are intentionally separated
+- Approval is limited to critical actions only: large discounts and voids
+- Gemini AI is explicitly deferred until the core retail workflow is stable
 
-## Server environment
+## Highlights
 
-- `PORT`: HTTP port (default `3000`).
-- `NODE_ENV`: set `production` to serve the built `dist/` application.
-- `GEMINI_API_KEY`: optional server-side Gemini credential. Never use a `VITE_` prefixed name for secrets because Vite exposes those to browser bundles.
+- Multi-store / multi-branch operations
+- POS-based sales workflow
+- Inventory and stock tracking
+- Offline-first transaction handling
+- Simple document and receipt generation
+- Basic business rules and approval flow
+- Security baseline and request hardening
+- AI advisor integration (optional, server-side only)
 
-## HTTP endpoints
+## Core Principles
 
-- `POST /api/exec`: dispatches a mode through `executeAPIMode`; requires `mode`, `request_id`, and object-valued `payload`.
-- `POST /api/gemini/advisor`: accepts a bounded `query` and a store ID (`TKO1`–`TKO4`, `GDG`, or `ALL`).
-- `GET /api/print/receipt/:trxId`: renders an existing in-memory transaction receipt.
-- `GET /api/dokumen/pdf/:tipe/:id`: currently returns a demo HTML document template (not a PDF).
-- `GET /api/health`: basic liveness response; does not verify database readiness.
+1. Cashier UX must be fast and simple.
+2. Owner UX must focus on summaries and decision support.
+3. Offline transactions are allowed, but never final until server validation.
+4. Server validation decides the final state of price, stock, and transaction outcome.
+5. Critical actions must be reviewable and auditable.
+6. The architecture must avoid over-committing to a weak adapter model.
 
-## Security baseline in this branch
+## Tech Stack
 
-Express request size is limited, JSON envelopes are checked, endpoint request rates are bounded, basic security headers are emitted, server errors do not return exception details, and dynamic receipt/document text is HTML-escaped. These are baseline mitigations, not a production security certification. CSP, persistent storage, proper auth, per-mode validation, automated tests, and distributed rate limiting remain follow-up work.
+- Frontend: React + TypeScript + Vite
+- Backend: Express + TypeScript
+- Runtime: Node.js
+- Offline/local storage: IndexedDB
+- AI integration: Google Gemini (server-side only)
+- Styling: Tailwind CSS
+- Build tooling: Vite, TSX
+
+## Current Product Positioning
+
+This project is not designed to behave like a large corporate ERP. The operational model is deliberately constrained to what is realistic for a small retail environment:
+
+- a few stores,
+- a few cashiers per store,
+- limited approval flow,
+- a core POS and stock workflow,
+- offline resilience without compromising final accountability.
+
+## Security and Operational Guardrails
+
+This branch includes a baseline security layer and operational assumptions:
+- request size limiting,
+- strict JSON parsing,
+- request rate limiting,
+- security headers,
+- generic internal error handling,
+- no stack trace leakage to clients,
+- no trusted client-side control for stock or pricing final state.
+
+## Current Limitations
+
+- The default database is in-memory and resets on restart.
+- The system is not designed as a production-grade multi-instance deployment.
+- PIN-based login is demo-oriented and not a secure production authentication model.
+- Some business flows are still simulation-based.
+- Backup and restore behavior is still a prototype.
+- API validation is a baseline safeguard only, not exhaustive business validation.
+- This project is intentionally scoped for MSME retail and not an enterprise ERP.
+
+## Roadmap
+
+Planned focus areas:
+1. robust authentication and role management,
+2. persistent database integration,
+3. offline sync reliability,
+4. proper audit logs and approvals,
+5. deployment hardening,
+6. business reporting and dashboard analytics.
+
+## Disclaimer
+
+This repository is a prototype ERP/PWA system for fashion retail operations. It is not yet a production-ready commercial ERP platform and should be used with appropriate validation, testing, and operational review before real business deployment.
