@@ -10,7 +10,18 @@ This project is designed for small to medium-sized fashion retail businesses tha
 - simple reporting,
 - basic operational controls.
 
-It is currently positioned as a functional prototype and MVP foundation, not a production-grade ERP system.
+This repository is currently positioned as a functional prototype and MVP foundation for internal evaluation. It is not a production-grade ERP system.
+
+## Product Decisions
+
+The project is intentionally scoped around a realistic MSME operating model:
+
+- Multi-store from the start
+- Offline-first as a core requirement, not a bonus feature
+- Server remains the source of truth for pricing, stock, and final transaction state
+- Owner and cashier UX are intentionally separated
+- Approval is limited to critical actions only: large discounts and voids
+- Gemini AI is explicitly deferred until the core retail workflow is stable
 
 ## Highlights
 
@@ -23,6 +34,15 @@ It is currently positioned as a functional prototype and MVP foundation, not a p
 - Security baseline and request hardening
 - AI advisor integration (optional, server-side only)
 
+## Core Principles
+
+1. Cashier UX must be fast and simple.
+2. Owner UX must focus on summaries and decision support.
+3. Offline transactions are allowed, but never final until server validation.
+4. Server validation decides the final state of price, stock, and transaction outcome.
+5. Critical actions must be reviewable and auditable.
+6. The architecture must avoid over-committing to a weak adapter model.
+
 ## Tech Stack
 
 - Frontend: React + TypeScript + Vite
@@ -33,175 +53,28 @@ It is currently positioned as a functional prototype and MVP foundation, not a p
 - Styling: Tailwind CSS
 - Build tooling: Vite, TSX
 
-## Project Structure
+## Current Product Positioning
 
-```text
-ERP-PWA-Toko-Baju-/
-├── public/
-├── src/
-│   ├── components/
-│   ├── gas/
-│   ├── hooks/
-│   ├── services/
-│   ├── types/
-│   ├── App.tsx
-│   ├── index.css
-│   └── main.tsx
-├── docs/
-│   └── TECHNICAL_SPEC.md
-├── .env.example
-├── .gitignore
-├── index.html
-├── metadata.json
-├── package.json
-├── server.ts
-├── tsconfig.json
-├── vite.config.ts
-├── bun.lock
-├── README.md
-└── LICENSE
-```
+This project is not designed to behave like a large corporate ERP. The operational model is deliberately constrained to what is realistic for a small retail environment:
 
-## Core Principles
+- a few stores,
+- a few cashiers per store,
+- limited approval flow,
+- a core POS and stock workflow,
+- offline resilience without compromising final accountability.
 
-This project follows a pragmatic approach for MSME retail operations:
+## Security and Operational Guardrails
 
-1. Keep the interface simple and fast for cashier workflows.
-2. Support offline transactions without interrupting daily operations.
-3. Keep business-critical validation in the backend.
-4. Favor practical usability over theoretical ERP complexity.
-5. Keep storage and deployment choices flexible.
-
-## Getting Started
-
-### 1. Install dependencies
-
-```bash
-npm install
-# or
-bun install
-```
-
-### 2. Configure environment
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Then set your values as needed.
-
-### 3. Start development server
-
-```bash
-npm run dev
-# or
-bun run dev
-```
-
-### 4. Build for production
-
-```bash
-npm run build
-```
-
-### 5. Run the production server
-
-```bash
-NODE_ENV=production npm start
-```
-
-## Environment Variables
-
-Example environment file:
-
-```env
-GEMINI_API_KEY=
-PORT=3000
-NODE_ENV=development
-```
-
-Notes:
-- `GEMINI_API_KEY` is optional and must remain server-side only.
-- `PORT` defaults to `3000` if not set.
-- `NODE_ENV=production` serves the built frontend from `dist/`.
-
-## API Overview
-
-This project exposes a small set of demo and prototype endpoints for internal business workflow testing.
-
-### Health
-
-```http
-GET /api/health
-```
-
-### Execute business mode
-
-```http
-POST /api/exec
-Content-Type: application/json
-```
-
-Example body:
-
-```json
-{
-  "mode": "sales",
-  "request_id": "REQ-001",
-  "payload": {
-    "store_id": "TKO1"
-  }
-}
-```
-
-### Gemini advisor
-
-```http
-POST /api/gemini/advisor
-Content-Type: application/json
-```
-
-Example body:
-
-```json
-{
-  "query": "Berikan rekomendasi cepat untuk penjualan hari ini",
-  "toko_id": "TKO1"
-}
-```
-
-### Receipt print
-
-```http
-GET /api/print/receipt/:trxId
-```
-
-### Demo document endpoint
-
-```http
-GET /api/dokumen/pdf/:tipe/:id
-```
-
-## Security Baseline
-
-This repository includes a basic protection layer such as:
+This branch includes a baseline security layer and operational assumptions:
 - request size limiting,
 - strict JSON parsing,
 - request rate limiting,
 - security headers,
 - generic internal error handling,
-- no stack trace leakage to clients.
-
-Important:
-- This is a baseline only.
-- It is not a complete identity or authorization model.
-- It should not be treated as production-grade security.
+- no stack trace leakage to clients,
+- no trusted client-side control for stock or pricing final state.
 
 ## Current Limitations
-
-This project is intentionally a prototype with the following known limitations:
 
 - The default database is in-memory and resets on restart.
 - The system is not designed as a production-grade multi-instance deployment.
@@ -209,7 +82,7 @@ This project is intentionally a prototype with the following known limitations:
 - Some business flows are still simulation-based.
 - Backup and restore behavior is still a prototype.
 - API validation is a baseline safeguard only, not exhaustive business validation.
-- The production-ready architecture should use a secure shared data store and proper session/auth flow.
+- This project is intentionally scoped for MSME retail and not an enterprise ERP.
 
 ## Roadmap
 
@@ -220,10 +93,6 @@ Planned focus areas:
 4. proper audit logs and approvals,
 5. deployment hardening,
 6. business reporting and dashboard analytics.
-
-## Status
-
-This repository is currently a prototype / MVP foundation for fashion retail operations and is not yet a production-ready ERP system.
 
 ## Disclaimer
 
